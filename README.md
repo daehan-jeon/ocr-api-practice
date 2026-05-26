@@ -1,63 +1,158 @@
-# CLOVA OCR API Practice
+# CLOVA OCR API — Text Extraction Guide
 
-이미지에서 텍스트를 자동으로 추출하는 Python 스크립트입니다.
-Naver CLOVA OCR API를 활용하며, Lomin Textscope API와 동일한 구조로 작동합니다.
-
----
-
-## 개요
-
-이 프로젝트는 OCR(광학 문자 인식) API를 호출해 이미지 파일에서 텍스트를 추출하고 출력하는 예제입니다.
-
-활용 시나리오 예시
-- 스캔된 문서에서 텍스트 데이터 추출
-- 인보이스, 영수증 이미지에서 주요 정보 자동 수집
-- 추출된 텍스트를 Google Sheets 등 외부 서비스와 연동
+Extract text from image files using the Naver CLOVA OCR API.  
+This guide walks you through authentication, request format, and response handling.
 
 ---
 
-## 사용 기술
+## Overview
 
-- Python 3
-- Naver CLOVA OCR API
-- python-dotenv (환경변수 관리)
-- requests (HTTP 통신)
+The CLOVA OCR API analyzes image files and returns all recognized text with position data. It supports printed and handwritten Korean, English, and Japanese.
 
----
+**Base URL**
 
-## 시작하기
-
-### 1. 패키지 설치
-
-    pip3 install requests python-dotenv
-
-### 2. 환경변수 설정
-
-.env 파일을 생성하고 아래 내용을 입력합니다.
-
-    API_URL=발급받은_APIGW_Invoke_URL/general
-    SECRET_KEY=발급받은_Secret_Key
-
-### 3. 이미지 준비
-
-텍스트가 포함된 이미지를 test.jpg 이름으로 프로젝트 폴더에 저장합니다.
-
-### 4. 실행
-
-    python3 ocr_test.py
+    https://clovaocr-api-kr.ncloud.com/external/v1/{domainUID}/{domainKey}/general
 
 ---
 
-## 출력 예시
+## Authentication
 
-    Problem
-    Hypothetical Situation
-    1st Reason
-    2nd Reason
+All requests require a secret key in the request header.
+
+| Header | Type | Description |
+|---|---|---|
+| X-OCR-SECRET | string | Secret key issued from CLOVA OCR Console |
 
 ---
 
-## 주의사항
+## Request
 
-- .env 파일은 .gitignore에 포함되어 있어 GitHub에 업로드되지 않습니다.
-- API 키를 코드에 직접 입력하지 마세요.
+**Method:** POST  
+**Content-Type:** application/json
+
+### Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| version | string | Yes | API version. Use `V2` |
+| requestId | string | Yes | Unique ID for the request |
+| timestamp | integer | Yes | Current timestamp in milliseconds |
+| images | array | Yes | List of image objects to process |
+
+### Image Object
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| format | string | Yes | Image format. `jpg`, `png`, `pdf`, `tiff` |
+| name | string | Yes | Identifier for the image |
+| data | string | Yes | Base64-encoded image data |
+
+### Example Request
+
+    import requests
+    import base64
+    import os
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    API_URL = os.getenv("API_URL")
+    SECRET_KEY = os.getenv("SECRET_KEY")
+
+    with open("invoice.jpg", "rb") as f:
+        image_data = base64.b64encode(f.read()).decode("utf-8")
+
+    payload = {
+        "version": "V2",
+        "requestId": "sample-001",
+        "timestamp": 0,
+        "images": [
+            {
+                "format": "jpg",
+                "name": "invoice",
+                "data": image_data
+            }
+        ]
+    }
+
+    headers = {
+        "X-OCR-SECRET": SECRET_KEY,
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(API_URL, headers=headers, json=payload)
+    print(response.json())
+
+---
+
+## Response
+
+### Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| version | string | API version |
+| requestId | string | Request ID passed in the request |
+| timestamp | integer | Time the request was processed |
+| images | array | List of recognition result objects |
+
+### Image Result Object
+
+| Field | Type | Description |
+|---|---|---|
+| inferResult | string | Recognition status. `SUCCESS` or `ERROR` |
+| fields | array | List of recognized text blocks |
+
+### Field Object
+
+| Field | Type | Description |
+|---|---|---|
+| inferText | string | Recognized text content |
+| inferConfidence | float | Confidence score (0 to 1) |
+| boundingPoly | object | Coordinates of the text block in the image |
+
+### Example Response
+
+    {
+        "version": "V2",
+        "requestId": "sample-001",
+        "timestamp": 1779771106090,
+        "images": [
+            {
+                "inferResult": "SUCCESS",
+                "fields": [
+                    {
+                        "inferText": "Invoice",
+                        "inferConfidence": 0.9977,
+                        "boundingPoly": {
+                            "vertices": [
+                                {"x": 401.0, "y": 230.0},
+                                {"x": 487.0, "y": 230.0},
+                                {"x": 487.0, "y": 250.0},
+                                {"x": 401.0, "y": 250.0}
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+---
+
+## Error Codes
+
+| Status Code | Description |
+|---|---|
+| 200 | Success |
+| 401 | Invalid or missing Secret Key |
+| 404 | Domain not found |
+| 500 | Internal server error |
+
+---
+
+## Notes
+
+- Supported image formats: `jpg`, `png`, `pdf`, `tiff`
+- Maximum file size: 50MB
+- Minimum resolution: 150dpi (A4 standard)
+- `.env` file is required for API credentials. Never hardcode keys in source code.
