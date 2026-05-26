@@ -21,7 +21,7 @@ All requests require a secret key in the request header.
 
 | Header | Type | Description |
 |---|---|---|
-| X-OCR-SECRET | string | Secret key issued from CLOVA OCR Console |
+| X-OCR-SECRET | string | Secret key issued from CLOVA OCR Console[https://console.ncloud.com/ocr/domain] |
 
 ---
 
